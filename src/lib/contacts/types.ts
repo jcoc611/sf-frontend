@@ -3,6 +3,25 @@
  * Field names stay snake_case so payloads map 1:1 onto the wire format.
  */
 
+/** `AddressType` — what an address is for. */
+export const ADDRESS_TYPES = ["home", "work", "other"] as const;
+
+export type AddressType = (typeof ADDRESS_TYPES)[number];
+
+/** `AddressRead` — a stored address, nested inside contact responses. */
+export interface Address {
+  id: number;
+  type: AddressType;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country: string | null;
+}
+
+/** `AddressInput` — one address inside a contact write payload. */
+export type AddressInput = Omit<Address, "id">;
+
 /** `ContactRead` — a stored contact, as returned by every contact endpoint. */
 export interface Contact {
   id: number;
@@ -12,11 +31,7 @@ export interface Contact {
   phone: string | null;
   company: string | null;
   job_title: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  postal_code: string | null;
-  country: string | null;
+  addresses: Address[];
   notes: string | null;
   photo: string | null;
   created_at: string;
@@ -27,8 +42,8 @@ export interface Contact {
 /** Every editable field, i.e. `ContactCreate` / `ContactReplace`. */
 export type ContactInput = Omit<
   Contact,
-  "id" | "created_at" | "updated_at" | "full_name"
->;
+  "id" | "created_at" | "updated_at" | "full_name" | "addresses"
+> & { addresses: AddressInput[] };
 
 /** `ContactPage` — one page of contacts plus the totals needed to paginate. */
 export interface ContactPage {
@@ -74,10 +89,13 @@ export type FormState = {
   status: "idle" | "error";
   /** Message shown above the form; used for API-level failures. */
   message?: string;
-  /** Per-field messages keyed by input name. */
-  fieldErrors?: Partial<Record<keyof ContactInput, string>>;
+  /**
+   * Per-field messages keyed by input name. Address fields use indexed paths
+   * (`addresses.0.city`); the top-level `addresses` key carries set-level errors.
+   */
+  fieldErrors?: Record<string, string>;
   /** Echo of the submitted values so the form survives a failed round trip. */
-  values?: Partial<Record<keyof ContactInput, string>>;
+  values?: Partial<ContactInput>;
 };
 
 export const EMPTY_FORM_STATE: FormState = { status: "idle" };

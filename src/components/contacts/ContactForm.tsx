@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AlertCircle, Loader2 } from "lucide-react";
 import Field from "@/components/ui/Field";
 import Button, { buttonClasses } from "@/components/ui/Button";
+import AddressFields from "@/components/contacts/AddressFields";
 import PhotoField from "@/components/contacts/PhotoField";
 import { CONTACT_FIELD_GROUPS } from "@/lib/contacts/schema";
 import {
@@ -19,6 +20,9 @@ export type ContactFormAction = (
   state: FormState,
   formData: FormData,
 ) => Promise<FormState>;
+
+/** The contact fields rendered as plain string inputs. */
+type ScalarContactKey = Exclude<keyof ContactInput, "addresses">;
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -51,9 +55,8 @@ export default function ContactForm({
 }) {
   const [state, formAction] = useActionState(action, EMPTY_FORM_STATE);
 
-  function valueFor(name: keyof ContactInput): string {
-    const value = state.values?.[name] ?? contact?.[name];
-    return typeof value === "string" ? value : "";
+  function valueFor(name: ScalarContactKey): string {
+    return state.values?.[name] ?? contact?.[name] ?? "";
   }
 
   return (
@@ -79,6 +82,11 @@ export default function ContactForm({
           error={state.fieldErrors?.photo}
         />
       </fieldset>
+
+      <AddressFields
+        defaultAddresses={state.values?.addresses ?? contact?.addresses ?? []}
+        fieldErrors={state.fieldErrors}
+      />
 
       {CONTACT_FIELD_GROUPS.map((group) => (
         <fieldset key={group.title} className="space-y-4">

@@ -1,9 +1,12 @@
-import type { Contact } from "./types";
+import { ADDRESS_TYPES, type Address, type AddressType } from "./types";
 
 /** Presentation helpers shared by the list, the detail page, and the cards. */
 
 /** Up to two letters for the avatar bubble. */
-export function initials(contact: Pick<Contact, "first_name" | "last_name">) {
+export function initials(contact: {
+  first_name: string;
+  last_name: string;
+}) {
   return `${contact.first_name.at(0) ?? ""}${contact.last_name.at(0) ?? ""}`
     .toUpperCase()
     .trim();
@@ -36,7 +39,10 @@ export function formatTimestamp(iso: string): string {
 }
 
 /** "Ada Lovelace · Mathematician at Analytical Engines"-style subtitle. */
-export function jobLine(contact: Contact): string | null {
+export function jobLine(contact: {
+  job_title: string | null;
+  company: string | null;
+}): string | null {
   if (contact.job_title && contact.company) {
     return `${contact.job_title} at ${contact.company}`;
   }
@@ -44,13 +50,27 @@ export function jobLine(contact: Contact): string | null {
 }
 
 /** Single-line postal address, skipping the parts that are not filled in. */
-export function addressLine(contact: Contact): string | null {
+export function formatAddress(address: Omit<Address, "id" | "type">): string {
   const parts = [
-    contact.address,
-    contact.city,
-    [contact.state, contact.postal_code].filter(Boolean).join(" "),
-    contact.country,
+    address.street,
+    address.city,
+    [address.state, address.postal_code].filter(Boolean).join(" "),
+    address.country,
   ].filter((part): part is string => Boolean(part && part.trim()));
 
-  return parts.length ? parts.join(", ") : null;
+  return parts.join(", ");
 }
+
+/** Addresses bucketed by type, in the canonical home/work/other order. */
+export function groupAddressesByType(addresses: Address[]): [AddressType, Address[]][] {
+  return ADDRESS_TYPES.flatMap((type) => {
+    const group = addresses.filter((address) => address.type === type);
+    return group.length ? [[type, group] as [AddressType, Address[]]] : [];
+  });
+}
+
+export const ADDRESS_TYPE_LABELS: Record<AddressType, string> = {
+  home: "Home",
+  work: "Work",
+  other: "Other",
+};

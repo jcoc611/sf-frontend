@@ -24,11 +24,7 @@ const INPUT: ContactInput = {
   phone: null,
   company: null,
   job_title: null,
-  address: null,
-  city: null,
-  state: null,
-  postal_code: null,
-  country: null,
+  addresses: [],
   notes: null,
   photo: null,
 };
@@ -159,6 +155,21 @@ describe("error translation", () => {
     expect(toFieldErrors(error)).toEqual({
       email: "value is not a valid email address",
       first_name: "String should have at least 1 character",
+    });
+  });
+
+  it("keys nested address issues by their indexed path", () => {
+    const error = new ApiError(
+      422,
+      JSON.stringify({
+        detail: [
+          { loc: ["body", "addresses", 1, "city"], msg: "String should have at most 120 characters" },
+        ],
+      }),
+    );
+
+    expect(toFieldErrors(error)).toEqual({
+      "addresses.1.city": "String should have at most 120 characters",
     });
   });
 

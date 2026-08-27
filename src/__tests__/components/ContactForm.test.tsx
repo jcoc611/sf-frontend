@@ -33,7 +33,67 @@ describe("ContactForm", () => {
     expect(screen.getByLabelText(/first name/i)).toHaveValue("Ada");
     expect(screen.getByLabelText(/^email/i)).toHaveValue("ada@example.com");
     // Nulls become empty inputs rather than the string "null".
-    expect(screen.getByLabelText(/street address/i)).toHaveValue("");
+    expect(screen.getByLabelText(/notes/i)).toHaveValue("");
+    // Existing addresses render as editable blocks.
+    expect(screen.getByLabelText(/address 1 type/i)).toHaveValue("home");
+    expect(screen.getByLabelText(/city/i)).toHaveValue("San Francisco");
+  });
+
+  it("adds and removes address blocks", async () => {
+    renderForm(jest.fn(), makeContact({ addresses: [] }));
+
+    expect(screen.queryByLabelText(/address 1 type/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /add address/i }));
+    await userEvent.click(screen.getByRole("button", { name: /add address/i }));
+
+    expect(screen.getByLabelText(/address 1 type/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/address 2 type/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /remove address 1/i }));
+
+    expect(screen.queryByLabelText(/address 2 type/i)).not.toBeInTheDocument();
+  });
+
+  it("submits addresses under indexed field names", async () => {
+    const action = jest.fn<Promise<FormState>, [FormState, FormData]>(
+      async () => ({ status: "idle" }),
+    );
+    renderForm(action, makeContact());
+
+    await userEvent.click(screen.getByRole("button", { name: /create contact/i }));
+
+    await waitFor(() => expect(action).toHaveBeenCalled());
+
+    const formData = action.mock.calls[0][1];
+    expect(formData.get("addresses.0.type")).toBe("home");
+    expect(formData.get("addresses.0.city")).toBe("San Francisco");
+  });
+
+  it("keeps an address error on its block after an earlier block is removed", async () => {
+    const contact = makeContact({
+      addresses: [
+        { id: 1, type: "home", street: null, city: "Berkeley", state: null, postal_code: null, country: null },
+        { id: 2, type: "work", street: null, city: "Oakland", state: null, postal_code: null, country: null },
+      ],
+    });
+    const action = jest.fn(
+      async (): Promise<FormState> => ({
+        status: "error",
+        message: "Please fix the highlighted fields.",
+        fieldErrors: { "addresses.1.city": "City is wrong" },
+        values: { addresses: contact.addresses },
+      }),
+    );
+    renderForm(action, contact);
+
+    // Trigger the error state, then drop the first block.
+    await userEvent.click(screen.getByRole("button", { name: /create contact/i }));
+    await screen.findByText("City is wrong");
+    await userEvent.click(screen.getByRole("button", { name: /remove address 1/i }));
+
+    // The surviving Oakland block keeps its error even though it is now index 0.
+    expect(screen.getByText("City is wrong")).toBeInTheDocument();
   });
 
   it("submits the entered values to the action", async () => {

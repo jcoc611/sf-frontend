@@ -19,6 +19,9 @@ import type { Contact, FormState } from "@/lib/contacts/types";
 
 /** Mutations for the contacts UI. Every one of these runs only on the server. */
 
+/** Contact fields that take string values in the form state. */
+type ScalarContactKey = Exclude<keyof Contact, "addresses" | "id" | "created_at" | "updated_at" | "full_name">;
+
 function invalidate(contactId?: number) {
   revalidatePath("/contacts");
   if (contactId) revalidatePath(`/contacts/${contactId}`);
@@ -62,12 +65,13 @@ export async function saveContactAction(
     }
     if (error instanceof ApiError) {
       if (error.status === 409) {
+        const fieldErrors: Record<string, string> = {
+          email: apiErrorMessage(error, "This email is already in use."),
+        } satisfies Partial<Record<ScalarContactKey, string>>;
         return {
           status: "error",
           message: "That email address is already taken.",
-          fieldErrors: {
-            email: apiErrorMessage(error, "This email is already in use."),
-          },
+          fieldErrors,
           values,
         };
       }
