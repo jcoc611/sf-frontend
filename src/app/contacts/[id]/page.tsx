@@ -7,7 +7,13 @@ import ContactAvatar from "@/components/contacts/ContactAvatar";
 import DeleteContactButton from "@/components/contacts/DeleteContactButton";
 import { buttonClasses } from "@/components/ui/Button";
 import { getContact } from "@/lib/contacts/api";
-import { addressLine, formatTimestamp, jobLine } from "@/lib/contacts/format";
+import {
+  ADDRESS_TYPE_LABELS,
+  formatAddress,
+  formatTimestamp,
+  groupAddressesByType,
+  jobLine,
+} from "@/lib/contacts/format";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -43,7 +49,7 @@ export default async function ContactDetailPage({ params }: PageProps) {
   if (!contact) notFound();
 
   const subtitle = jobLine(contact);
-  const address = addressLine(contact);
+  const addressGroups = groupAddressesByType(contact.addresses);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
@@ -102,13 +108,38 @@ export default async function ContactDetailPage({ params }: PageProps) {
         </Row>
         <Row label="Company">{contact.company}</Row>
         <Row label="Job title">{contact.job_title}</Row>
-        <Row label="Address">{address}</Row>
         <Row label="Notes">
           {contact.notes ? (
             <span className="whitespace-pre-wrap">{contact.notes}</span>
           ) : null}
         </Row>
       </dl>
+
+      <section>
+        <h2 className="mb-2 font-display text-sm font-semibold text-foreground">
+          Addresses
+        </h2>
+        {addressGroups.length ? (
+          <div className="rounded-lg border border-border bg-card px-4 py-1">
+            {addressGroups.map(([type, addresses]) => (
+              <div key={type} className="py-3">
+                <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {ADDRESS_TYPE_LABELS[type]}
+                </span>
+                <ul className="mt-2 space-y-1.5 text-sm text-foreground">
+                  {addresses.map((address) => (
+                    <li key={address.id}>{formatAddress(address)}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+            No addresses yet.
+          </p>
+        )}
+      </section>
 
       <dl className="rounded-lg border border-border bg-card/50 text-[13px]">
         <Row label="ID">

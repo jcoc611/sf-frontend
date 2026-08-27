@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ContactInput } from "./types";
+import { ADDRESS_TYPES, type AddressInput, type ContactInput } from "./types";
 
 /**
  * Client/server-shared validation for the contact form.
@@ -35,6 +35,30 @@ export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 export const MAX_PHOTO_DATA_URL_LENGTH =
   Math.ceil((MAX_PHOTO_BYTES * 4) / 3) + 64;
 
+/** Matches the API's cap on addresses per contact. */
+export const MAX_ADDRESSES = 10;
+
+export const addressInputSchema = z
+  .object({
+    type: z.enum(ADDRESS_TYPES, { error: "Choose an address type" }),
+    street: optionalText(300, "Street address"),
+    city: optionalText(120, "City"),
+    state: optionalText(120, "State / region"),
+    postal_code: optionalText(20, "Postal code"),
+    country: optionalText(120, "Country"),
+  })
+  .check((ctx) => {
+    const value = ctx.value;
+    const filled = [value.street, value.city, value.state, value.postal_code, value.country];
+    if (filled.every((field) => !field)) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        message: "Fill in at least one address field, or remove the address",
+      });
+    }
+  });
+
 // Raster formats every browser renders; excludes svg (scriptable) and friends.
 // Keep in sync with the API's validator.
 const PHOTO_DATA_URL = /^data:image\/(png|jpeg|gif|webp);base64,/;
@@ -58,11 +82,10 @@ export const contactInputSchema = z.object({
   phone: optionalText(40, "Phone"),
   company: optionalText(200, "Company"),
   job_title: optionalText(200, "Job title"),
-  address: optionalText(300, "Address"),
-  city: optionalText(120, "City"),
-  state: optionalText(120, "State"),
-  postal_code: optionalText(20, "Postal code"),
-  country: optionalText(120, "Country"),
+  addresses: z
+    .array(addressInputSchema)
+    .max(MAX_ADDRESSES, `At most ${MAX_ADDRESSES} addresses`)
+    .default([]),
   notes: z
     .string()
     .trim()
@@ -85,16 +108,18 @@ export const contactInputSchema = z.object({
 
 export type ContactFormValues = z.input<typeof contactInputSchema>;
 
-/** Collapse a ZodError into one message per field, keyed by input name. */
-export function zodFieldErrors(
-  error: z.ZodError,
-): Partial<Record<keyof ContactInput, string>> {
-  const fieldErrors: Partial<Record<keyof ContactInput, string>> = {};
+/** Collapse a ZodError into one message per field, keyed by input path. */
+export function zodFieldErrors(error: z.ZodError): Record<string, string> {
+  const fieldErrors: Record<string, string> = {};
   for (const issue of error.issues) {
-    const key = issue.path[0];
-    if (typeof key === "string" && !(key in fieldErrors)) {
-      fieldErrors[key as keyof ContactInput] = issue.message;
-    }
+    // An issue against the address object as a whole (e.g. all fields blank)
+    // hangs off its type selector's path, so it renders inside the right block.
+    const path =
+      issue.path.length === 2 && issue.path[0] === "addresses"
+        ? [...issue.path, "type"]
+        : issue.path;
+    const key = path.join(".");
+    fieldErrors[key] ??= issue.message;
   }
   return fieldErrors;
 }
@@ -103,8 +128,11 @@ export function zodFieldErrors(
 /* Form metadata — one source of truth for the fields and their limits */
 /* ------------------------------------------------------------------ */
 
+/** The contact fields rendered as plain string inputs in the metadata groups. */
+type ScalarContactKey = Exclude<keyof ContactInput, "addresses">;
+
 export interface ContactFieldSpec {
-  name: keyof ContactInput;
+  name: ScalarContactKey;
   label: string;
   type?: "text" | "email" | "tel" | "textarea";
   required?: boolean;
@@ -182,48 +210,6 @@ export const CONTACT_FIELD_GROUPS: ContactFieldGroup[] = [
     ],
   },
   {
-    title: "Address",
-    description: "Optional postal details.",
-    fields: [
-      {
-        name: "address",
-        label: "Street address",
-        maxLength: 300,
-        placeholder: "1 Market St, Suite 400",
-        autoComplete: "street-address",
-        wide: true,
-      },
-      {
-        name: "city",
-        label: "City",
-        maxLength: 120,
-        placeholder: "San Francisco",
-        autoComplete: "address-level2",
-      },
-      {
-        name: "state",
-        label: "State / region",
-        maxLength: 120,
-        placeholder: "CA",
-        autoComplete: "address-level1",
-      },
-      {
-        name: "postal_code",
-        label: "Postal code",
-        maxLength: 20,
-        placeholder: "94105",
-        autoComplete: "postal-code",
-      },
-      {
-        name: "country",
-        label: "Country",
-        maxLength: 120,
-        placeholder: "USA",
-        autoComplete: "country-name",
-      },
-    ],
-  },
-  {
     title: "Notes",
     description: "Anything worth remembering. No length limit.",
     fields: [
@@ -243,18 +229,43 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
   (group) => group.fields,
 );
 
+export type AddressFieldName = keyof Omit<AddressInput, "type">;
+
+export const ADDRESS_FIELDS: { name: AddressFieldName; label: string; placeholder?: string }[] = [
+  { name: "street", label: "Street address", placeholder: "1 Market St, Suite 400" },
+  { name: "city", label: "City", placeholder: "San Francisco" },
+  { name: "state", label: "State / region", placeholder: "CA" },
+  { name: "postal_code", label: "Postal code", placeholder: "94105" },
+  { name: "country", label: "Country", placeholder: "USA" },
+];
+
+const ADDRESS_FIELD_NAME = /^addresses\.(\d+)\.(\w+)$/;
+
+/** Collect the indexed `addresses.N.field` inputs into a nested array. */
+function formDataToAddresses(formData: FormData): Record<string, string>[] {
+  const byIndex = new Map<number, Record<string, string>>();
+  for (const [key, value] of formData.entries()) {
+    const match = ADDRESS_FIELD_NAME.exec(key);
+    if (!match) continue;
+    const index = Number(match[1]);
+    const fields = byIndex.get(index) ?? {};
+    fields[match[2]] = String(value);
+    byIndex.set(index, fields);
+  }
+  return [...byIndex.entries()].sort(([a], [b]) => a - b).map(([, fields]) => fields);
+}
+
 /** Pull the contact fields out of a submitted form, as raw strings. */
-export function formDataToValues(
-  formData: FormData,
-): Partial<Record<keyof ContactInput, string>> {
+export function formDataToValues(formData: FormData): Partial<ContactInput> {
   return {
     ...(Object.fromEntries(
       CONTACT_FIELDS.map((field) => [
         field.name,
         String(formData.get(field.name) ?? ""),
       ]),
-    ) as Partial<Record<keyof ContactInput, string>>),
+    ) as Partial<ContactInput>),
     // Specialized fields submit their values through their own form controls.
     photo: String(formData.get("photo") ?? ""),
+    addresses: formDataToAddresses(formData) as unknown as AddressInput[],
   };
 }

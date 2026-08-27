@@ -33,7 +33,41 @@ describe("ContactForm", () => {
     expect(screen.getByLabelText(/first name/i)).toHaveValue("Ada");
     expect(screen.getByLabelText(/^email/i)).toHaveValue("ada@example.com");
     // Nulls become empty inputs rather than the string "null".
-    expect(screen.getByLabelText(/street address/i)).toHaveValue("");
+    expect(screen.getByLabelText(/notes/i)).toHaveValue("");
+    // Existing addresses render as editable blocks.
+    expect(screen.getByLabelText(/address 1 type/i)).toHaveValue("home");
+    expect(screen.getByLabelText(/city/i)).toHaveValue("San Francisco");
+  });
+
+  it("adds and removes address blocks", async () => {
+    renderForm(jest.fn(), makeContact({ addresses: [] }));
+
+    expect(screen.queryByLabelText(/address 1 type/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /add address/i }));
+    await userEvent.click(screen.getByRole("button", { name: /add address/i }));
+
+    expect(screen.getByLabelText(/address 1 type/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/address 2 type/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /remove address 1/i }));
+
+    expect(screen.queryByLabelText(/address 2 type/i)).not.toBeInTheDocument();
+  });
+
+  it("submits addresses under indexed field names", async () => {
+    const action = jest.fn<Promise<FormState>, [FormState, FormData]>(
+      async () => ({ status: "idle" }),
+    );
+    renderForm(action, makeContact());
+
+    await userEvent.click(screen.getByRole("button", { name: /create contact/i }));
+
+    await waitFor(() => expect(action).toHaveBeenCalled());
+
+    const formData = action.mock.calls[0][1];
+    expect(formData.get("addresses.0.type")).toBe("home");
+    expect(formData.get("addresses.0.city")).toBe("San Francisco");
   });
 
   it("submits the entered values to the action", async () => {

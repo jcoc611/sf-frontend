@@ -1,7 +1,8 @@
 import {
-  addressLine,
   avatarHue,
+  formatAddress,
   formatTimestamp,
+  groupAddressesByType,
   initials,
   jobLine,
 } from "@/lib/contacts/format";
@@ -49,22 +50,33 @@ describe("jobLine", () => {
   });
 });
 
-describe("addressLine", () => {
+describe("formatAddress", () => {
+  const home = makeContact().addresses[0];
+
   it("skips the parts that are not filled in", () => {
-    expect(addressLine(makeContact())).toBe("San Francisco, CA, USA");
+    expect(formatAddress(home)).toBe("San Francisco, CA, USA");
   });
 
   it("pairs the state with the postal code", () => {
     expect(
-      addressLine(makeContact({ address: "1 Market St", postal_code: "94105" })),
+      formatAddress({ ...home, street: "1 Market St", postal_code: "94105" }),
     ).toBe("1 Market St, San Francisco, CA 94105, USA");
   });
+});
 
-  it("returns null when there is no address at all", () => {
-    expect(
-      addressLine(
-        makeContact({ city: null, state: null, country: null, postal_code: null }),
-      ),
-    ).toBeNull();
+describe("groupAddressesByType", () => {
+  it("buckets by type in home/work/other order and drops empty groups", () => {
+    const groups = groupAddressesByType([
+      { id: 1, type: "work", street: null, city: "Oakland", state: null, postal_code: null, country: null },
+      { id: 2, type: "home", street: null, city: "Berkeley", state: null, postal_code: null, country: null },
+      { id: 3, type: "home", street: null, city: "Alameda", state: null, postal_code: null, country: null },
+    ]);
+
+    expect(groups.map(([type]) => type)).toEqual(["home", "work"]);
+    expect(groups[0][1].map((address) => address.city)).toEqual(["Berkeley", "Alameda"]);
+  });
+
+  it("returns nothing for a contact with no addresses", () => {
+    expect(groupAddressesByType([])).toEqual([]);
   });
 });
