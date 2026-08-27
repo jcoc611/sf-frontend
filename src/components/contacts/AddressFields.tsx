@@ -15,9 +15,10 @@ const CONTROL =
 
 let nextKey = 0;
 
-function toBlock(address: AddressInput) {
+function toBlock(address: AddressInput, sourceIndex: number) {
   return {
     key: ++nextKey,
+    sourceIndex,
     type: address.type,
     street: address.street ?? "",
     city: address.city ?? "",
@@ -28,7 +29,10 @@ function toBlock(address: AddressInput) {
 }
 
 function emptyBlock() {
-  return toBlock({ type: "home", street: "", city: "", state: "", postal_code: "", country: "" });
+  return toBlock(
+    { type: "home", street: "", city: "", state: "", postal_code: "", country: "" },
+    -1,
+  );
 }
 
 /**
@@ -43,7 +47,16 @@ export default function AddressFields({
   defaultAddresses: AddressInput[];
   fieldErrors?: Record<string, string>;
 }) {
-  const [blocks, setBlocks] = useState(() => defaultAddresses.map(toBlock));
+  const [blocks, setBlocks] = useState(() =>
+    defaultAddresses.map((address, index) => toBlock(address, index)),
+  );
+
+  // fieldErrors arrives keyed by the indices at submit time; map each block's
+  // original index to its current position so removals shift errors correctly.
+  function errorFor(block: (typeof blocks)[number], field: string): string | undefined {
+    if (block.sourceIndex < 0) return undefined;
+    return fieldErrors?.[`addresses.${block.sourceIndex}.${field}`];
+  }
 
   return (
     <fieldset className="space-y-4">
@@ -82,9 +95,9 @@ export default function AddressFields({
                   name={`addresses.${index}.type`}
                   defaultValue={block.type}
                   aria-label={`Address ${index + 1} type`}
-                  aria-invalid={fieldErrors?.[`addresses.${index}.type`] ? true : undefined}
+                  aria-invalid={errorFor(block, "type") ? true : undefined}
                   className={`${CONTROL} w-auto py-1 pr-8 ${
-                    fieldErrors?.[`addresses.${index}.type`]
+                    errorFor(block, "type")
                       ? "border-destructive"
                       : "border-border"
                   }`}
@@ -110,16 +123,16 @@ export default function AddressFields({
               </Button>
             </div>
 
-            {fieldErrors?.[`addresses.${index}.type`] ? (
+            {errorFor(block, "type") ? (
               <p role="alert" className="mb-3 text-[13px] text-destructive">
-                {fieldErrors[`addresses.${index}.type`]}
+                {errorFor(block, "type")}
               </p>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               {ADDRESS_FIELDS.map((field) => {
                 const name = `addresses.${index}.${field.name}`;
-                const error = fieldErrors?.[name];
+                const error = errorFor(block, field.name);
                 return (
                   <div
                     key={field.name}
