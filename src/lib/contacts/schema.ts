@@ -35,6 +35,10 @@ export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 export const MAX_PHOTO_DATA_URL_LENGTH =
   Math.ceil((MAX_PHOTO_BYTES * 4) / 3) + 64;
 
+// Raster formats every browser renders; excludes svg (scriptable) and friends.
+// Keep in sync with the API's validator.
+const PHOTO_DATA_URL = /^data:image\/(png|jpeg|gif|webp);base64,/;
+
 export const contactInputSchema = z.object({
   first_name: requiredText(100, "First name"),
   last_name: requiredText(100, "Last name"),
@@ -62,8 +66,8 @@ export const contactInputSchema = z.object({
   photo: z
     .string()
     .max(MAX_PHOTO_DATA_URL_LENGTH, "Photo must be under 2 MB")
-    .refine((value) => !value || value.startsWith("data:image/"), {
-      error: "Photo must be an image",
+    .refine((value) => !value || PHOTO_DATA_URL.test(value), {
+      error: "Photo must be a PNG, JPEG, GIF, or WebP image",
     })
     .transform((value) => value || null)
     .nullable()

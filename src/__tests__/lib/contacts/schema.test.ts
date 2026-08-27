@@ -66,7 +66,18 @@ describe("contactInputSchema", () => {
 
   it("rejects a photo that is not an image data URL", () => {
     const result = contactInputSchema.safeParse(values({ photo: "https://x.test/a.png" }));
-    expect(zodFieldErrors(result.error!).photo).toBe("Photo must be an image");
+    expect(zodFieldErrors(result.error!).photo).toBe(
+      "Photo must be a PNG, JPEG, GIF, or WebP image",
+    );
+  });
+
+  it("rejects svg photos", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "data:image/svg+xml;base64,PHN2Zz4=" }),
+    );
+    expect(zodFieldErrors(result.error!).photo).toBe(
+      "Photo must be a PNG, JPEG, GIF, or WebP image",
+    );
   });
 
   it("enforces the photo size limit", () => {
