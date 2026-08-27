@@ -28,6 +28,13 @@ function requiredText(max: number, label: string) {
     .max(max, `${label} must be ${max} characters or fewer`);
 }
 
+/** Matches the API's cap: about 2 MB of image data once base64-decoded. */
+export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+
+// Base64 expands data by 4/3; reserve room for the MIME-specific data URL prefix.
+export const MAX_PHOTO_DATA_URL_LENGTH =
+  Math.ceil((MAX_PHOTO_BYTES * 4) / 3) + 64;
+
 export const contactInputSchema = z.object({
   first_name: requiredText(100, "First name"),
   last_name: requiredText(100, "Last name"),
@@ -49,6 +56,15 @@ export const contactInputSchema = z.object({
   notes: z
     .string()
     .trim()
+    .transform((value) => value || null)
+    .nullable()
+    .default(null),
+  photo: z
+    .string()
+    .max(MAX_PHOTO_DATA_URL_LENGTH, "Photo must be under 2 MB")
+    .refine((value) => !value || value.startsWith("data:image/"), {
+      error: "Photo must be an image",
+    })
     .transform((value) => value || null)
     .nullable()
     .default(null),
@@ -217,11 +233,15 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
 /** Pull the contact fields out of a submitted form, as raw strings. */
 export function formDataToValues(
   formData: FormData,
-): Record<keyof ContactInput, string> {
-  return Object.fromEntries(
-    CONTACT_FIELDS.map((field) => [
-      field.name,
-      String(formData.get(field.name) ?? ""),
-    ]),
-  ) as Record<keyof ContactInput, string>;
+): Partial<Record<keyof ContactInput, string>> {
+  return {
+    ...(Object.fromEntries(
+      CONTACT_FIELDS.map((field) => [
+        field.name,
+        String(formData.get(field.name) ?? ""),
+      ]),
+    ) as Partial<Record<keyof ContactInput, string>>),
+    // Specialized fields submit their values through their own form controls.
+    photo: String(formData.get("photo") ?? ""),
+  };
 }
