@@ -23,6 +23,7 @@ export default function PhotoField({
   const [photo, setPhoto] = useState(defaultPhoto || null);
   const [message, setMessage] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const readId = useRef(0);
 
   function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -33,9 +34,11 @@ export default function PhotoField({
       return;
     }
     setMessage(null);
+    const currentReadId = ++readId.current;
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result;
+      if (currentReadId !== readId.current) return;
       if (typeof result !== "string" || result.length > MAX_PHOTO_DATA_URL_LENGTH) {
         setPhoto(null);
         setMessage("Photo must be 2 MB or smaller.");
@@ -85,7 +88,15 @@ export default function PhotoField({
             {photo ? "Change photo" : "Upload photo"}
           </Button>
           {photo ? (
-            <Button variant="ghost" size="sm" onClick={() => setPhoto(null)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                ++readId.current;
+                setPhoto(null);
+                if (fileInput.current) fileInput.current.value = "";
+              }}
+            >
               Remove
             </Button>
           ) : null}
