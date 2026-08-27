@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
 import { contactsHref, type ContactListQuery } from "@/lib/contacts/query";
 import { PER_PAGE_OPTIONS } from "@/lib/contacts/types";
+import { ExportAllButton } from "./ExportButtons";
+import ImportContactsButton from "./ImportContactsButton";
 
 const DEBOUNCE_MS = 300;
 
@@ -110,6 +112,11 @@ export default function ContactsToolbar({ query }: { query: ContactListQuery }) 
           ))}
         </select>
       </label>
+
+      <div className="ml-auto flex items-center gap-2">
+        <ImportContactsButton />
+        <ExportAllButton />
+      </div>
     </div>
   );
 }
