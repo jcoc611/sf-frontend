@@ -49,6 +49,12 @@ const nextConfig: NextConfig = {
   // nothing to do with the backend's :8000. `localhost` and `**.localhost` are
   // already allowed by default; they are listed for the next person reading this.
   allowedDevOrigins: ["localhost", "127.0.0.1", "192.168.0.15"],
+  experimental: {
+    serverActions: {
+      // Contact photos travel through server actions as base64 data URLs.
+      bodySizeLimit: "4mb",
+    },
+  },
   // `/` is not a page: the app is the contacts manager. A routing-layer redirect
   // is a real 308, unlike a prerendered page that would meta-refresh the browser.
   async redirects() {

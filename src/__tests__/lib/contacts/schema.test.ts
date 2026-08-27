@@ -19,6 +19,7 @@ function values(overrides: Record<string, string> = {}) {
     postal_code: "",
     country: "",
     notes: "",
+    photo: "",
     ...overrides,
   };
 }
@@ -56,6 +57,36 @@ describe("contactInputSchema", () => {
     expect(zodFieldErrors(result.error!).email).toBe("Enter a valid email address");
   });
 
+  it("accepts a base64 image data URL as the photo", () => {
+    const parsed = contactInputSchema.parse(
+      values({ photo: "data:image/png;base64,iVBORw0KGgo=" }),
+    );
+    expect(parsed.photo).toBe("data:image/png;base64,iVBORw0KGgo=");
+  });
+
+  it("rejects a photo that is not an image data URL", () => {
+    const result = contactInputSchema.safeParse(values({ photo: "https://x.test/a.png" }));
+    expect(zodFieldErrors(result.error!).photo).toBe(
+      "Photo must be a PNG, JPEG, GIF, or WebP image",
+    );
+  });
+
+  it("rejects svg photos", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "data:image/svg+xml;base64,PHN2Zz4=" }),
+    );
+    expect(zodFieldErrors(result.error!).photo).toBe(
+      "Photo must be a PNG, JPEG, GIF, or WebP image",
+    );
+  });
+
+  it("enforces the photo size limit", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: `data:image/png;base64,${"A".repeat(2_800_001)}` }),
+    );
+    expect(zodFieldErrors(result.error!).photo).toBe("Photo must be under 2 MB");
+  });
+
   it("enforces the API's length limits", () => {
     const result = contactInputSchema.safeParse(
       values({ first_name: "a".repeat(101), postal_code: "9".repeat(21) }),
@@ -79,8 +110,9 @@ describe("formDataToValues", () => {
 
     expect(extracted.first_name).toBe("Grace");
     expect(extracted.last_name).toBe("");
+    expect(extracted.photo).toBe("");
     expect(Object.keys(extracted).sort()).toEqual(
-      CONTACT_FIELDS.map((field) => field.name).sort(),
+      [...CONTACT_FIELDS.map((field) => field.name), "photo"].sort(),
     );
   });
 });
